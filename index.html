@@ -22,10 +22,25 @@
     <div class="app-container">
         <header>
             <h1>My To-Do List <i class="fa-solid fa-check-double"></i></h1>
-            <button id="notify-btn" class="icon-btn" title="Enable Notifications">
-                <i class="fa-regular fa-bell"></i>
-            </button>
+            <div class="header-controls">
+                <button id="theme-btn" class="icon-btn" title="Toggle Dark Mode">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <button id="notify-btn" class="icon-btn" title="Enable Notifications">
+                    <i class="fa-regular fa-bell"></i>
+                </button>
+            </div>
         </header>
+
+        <div class="progress-container">
+            <div class="progress-info">
+                <span>Daily Progress</span>
+                <span id="progress-text">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+        </div>
 
         <section class="input-section">
             <div class="input-group">
@@ -33,6 +48,11 @@
             </div>
             <div class="input-group row">
                 <input type="datetime-local" id="task-date">
+                <select id="task-priority">
+                    <option value="low">Low Priority</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High Priority</option>
+                </select>
                 <button id="add-btn">Add Task</button>
             </div>
         </section>

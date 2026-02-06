@@ -6,10 +6,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskList = document.getElementById('task-list');
     const filterBtns = document.querySelectorAll('.filter-btn');
     const notifyBtn = document.getElementById('notify-btn');
+    const taskPriority = document.getElementById('task-priority');
+    const themeBtn = document.getElementById('theme-btn');
 
     // State
     let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
     let currentFilter = 'all';
+
+    // Theme Initialization
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
 
     // Initialization
     renderTasks();
@@ -27,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners
     addBtn.addEventListener('click', addTask);
     taskList.addEventListener('click', handleTaskAction);
+    taskList.addEventListener('dblclick', handleTaskEdit); // Enable inline edit
     filterBtns.forEach(btn => btn.addEventListener('click', (e) => {
         // UI Cleanup
         filterBtns.forEach(b => b.classList.remove('active'));
@@ -38,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
 
     notifyBtn.addEventListener('click', requestNotificationPermission);
+    themeBtn.addEventListener('click', toggleTheme);
 
     // Check for due tasks every minute
     setInterval(checkDueTasks, 60000);
@@ -46,9 +55,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Functions
 
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateThemeIcon(newTheme);
+    }
+
+    function updateThemeIcon(theme) {
+        const icon = themeBtn.querySelector('i');
+        if (theme === 'dark') {
+            icon.classList.remove('fa-moon');
+            icon.classList.add('fa-sun');
+        } else {
+            icon.classList.remove('fa-sun');
+            icon.classList.add('fa-moon');
+        }
+    }
+
     function addTask() {
         const title = taskInput.value.trim();
         const date = taskDate.value;
+        const priority = taskPriority.value;
 
         if (title === '') {
             showToast('Please enter a task!', 'error');
@@ -59,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: Date.now().toString(),
             title: title,
             date: date, // ISO string likely
+            priority: priority,
             completed: false,
             notified: false
         };
@@ -70,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset inputs
         taskInput.value = '';
         taskDate.value = '';
+        taskPriority.value = 'medium'; // Reset to default
         showToast('Task added successfully', 'success');
     }
 
@@ -91,6 +123,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleTaskEdit(e) {
+        const taskTitle = e.target.closest('.task-title');
+        if (!taskTitle) return;
+
+        const taskItem = taskTitle.closest('.task-item');
+        const id = taskItem.dataset.id;
+        const currentText = taskTitle.textContent;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentText;
+        input.className = 'edit-input'; // We can style this if needed, or rely on defaults
+        input.style.width = '100%';
+        input.style.border = 'none';
+        input.style.borderBottom = '1px solid var(--primary-color)';
+        input.style.background = 'transparent';
+        input.style.color = 'var(--text-primary)';
+        input.style.fontFamily = 'inherit';
+        input.style.fontSize = 'inherit';
+        input.style.outline = 'none';
+
+        taskTitle.replaceWith(input);
+        input.focus();
+
+        const saveEdit = () => {
+            const newText = input.value.trim();
+            if (newText) {
+                updateTaskTitle(id, newText);
+            } else {
+                renderTasks(); // Revert if empty
+            }
+        };
+
+        input.addEventListener('blur', saveEdit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                input.blur();
+            }
+        });
+    }
+
+    function updateTaskTitle(id, newTitle) {
+        tasks = tasks.map(task =>
+            task.id === id ? { ...task, title: newTitle } : task
+        );
+        saveTasks();
+        renderTasks();
+    }
+
     function deleteTask(id) {
         tasks = tasks.filter(task => task.id !== id);
         saveTasks();
@@ -109,12 +190,16 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTasks();
     }
 
+    // Calls to updateProgress
+    // We need to call updateProgress() whenever tasks are modified (add, delete, toggle, load)
+
     function saveTasks() {
         localStorage.setItem('tasks', JSON.stringify(tasks));
+        updateProgress(); // Update progress on save
     }
 
     function renderTasks() {
-        // Filter
+        // Filter logic...
         let filteredTasks = tasks;
         if (currentFilter === 'pending') {
             filteredTasks = tasks.filter(t => !t.completed);
@@ -122,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredTasks = tasks.filter(t => t.completed);
         }
 
-        // Sort by date (if exists) then by id
+        // Sort logic...
         filteredTasks.sort((a, b) => {
             if (a.date && b.date) return new Date(a.date) - new Date(b.date);
             if (a.date) return -1;
@@ -140,34 +225,122 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>No ${currentFilter === 'all' ? '' : currentFilter} tasks found.</p>
                 </div>
             `;
-            return;
+            // We don't return here if we want to ensure progress is updated even if empty view
+            // But usually renderTasks is called after saveTasks which calls updateProgress
+            // So it's fine.
+        } else {
+            // Render items
+            filteredTasks.forEach(task => { // ... existing render logic
+                // Format Date
+                let dateDisplay = '';
+                if (task.date) {
+                    const d = new Date(task.date);
+                    dateDisplay = `<i class="fa-regular fa-clock"></i> ${d.toLocaleString()}`;
+                }
+
+                const priorityClass = task.priority ? `priority-${task.priority}` : 'priority-medium';
+
+                const li = document.createElement('li');
+                li.className = `task-item ${task.completed ? 'completed' : ''} ${priorityClass}`;
+                li.dataset.id = task.id;
+
+                li.innerHTML = `
+                    <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
+                    <div class="task-content">
+                        <div class="task-title" title="Double click to edit">${escapeHtml(task.title)}</div>
+                        ${dateDisplay ? `<div class="task-date">${dateDisplay}</div>` : ''}
+                    </div>
+                    <button class="delete-btn" aria-label="Delete Task">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                taskList.appendChild(li);
+            });
         }
 
-        filteredTasks.forEach(task => {
-            // Format Date
-            let dateDisplay = '';
-            if (task.date) {
-                const d = new Date(task.date);
-                dateDisplay = `<i class="fa-regular fa-clock"></i> ${d.toLocaleString()}`;
-            }
-
-            const li = document.createElement('li');
-            li.className = `task-item ${task.completed ? 'completed' : ''}`;
-            li.dataset.id = task.id;
-
-            li.innerHTML = `
-                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
-                <div class="task-content">
-                    <div class="task-title">${escapeHtml(task.title)}</div>
-                    ${dateDisplay ? `<div class="task-date">${dateDisplay}</div>` : ''}
-                </div>
-                <button class="delete-btn" aria-label="Delete Task">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            `;
-            taskList.appendChild(li);
-        });
+        updateProgress(); // Ensure progress is correct on render (initial load)
     }
+
+    function updateProgress() {
+        const total = tasks.length;
+        const completed = tasks.filter(t => t.completed).length;
+        const percentage = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+
+        if (progressFill && progressText) {
+            progressFill.style.width = `${percentage}%`;
+            progressText.textContent = `${percentage}%`;
+        }
+
+        if (total > 0 && completed === total) {
+            launchConfetti();
+        }
+    }
+
+    // Confetti Logic
+    function launchConfetti() {
+        // Simple canvas confetti implementation
+        // Prevent spamming if already running? 
+        // Let's allow it for every 100% completion trigger (e.g. last task checked)
+
+        const canvas = document.createElement('canvas');
+        canvas.id = 'confetti-canvas';
+        document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const pieces = [];
+        const numberOfPieces = 100;
+        const colors = ['#6c5ce7', '#00b894', '#fdcb6e', '#ff7675', '#74b9ff'];
+
+        for (let i = 0; i < numberOfPieces; i++) {
+            pieces.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                rotation: Math.random() * 360,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: Math.random() * 10 + 5,
+                speed: Math.random() * 5 + 2
+            });
+        }
+
+        let animationId;
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            pieces.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation * Math.PI / 180);
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                ctx.restore();
+
+                p.y += p.speed;
+                p.rotation += 2;
+
+                if (p.y > canvas.height) {
+                    p.y = -20; // reset to top
+                }
+            });
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // Stop after 3 seconds
+        setTimeout(() => {
+            cancelAnimationFrame(animationId);
+            canvas.remove();
+        }, 3000);
+    }
+
 
     function requestNotificationPermission() {
         if (!("Notification" in window)) {
